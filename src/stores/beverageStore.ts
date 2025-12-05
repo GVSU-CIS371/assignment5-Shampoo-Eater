@@ -60,8 +60,8 @@ export const useBeverageStore = defineStore("BeverageStore", {
             this.bases = bases;
           } else {
             this.bases = qs.docs.map((qd: QueryDocumentSnapshot) => ({
-              id: qd.id,
-              name: qd.data().name,
+              id: qd.data().id,
+              name: qd.id,
               color: qd.data().color,
             })) as BaseBeverageType[];
           }
@@ -88,8 +88,8 @@ export const useBeverageStore = defineStore("BeverageStore", {
             this.syrups = syrups;
           } else {
             this.syrups = qs.docs.map((qd: QueryDocumentSnapshot) => ({
-              id: qd.id,
-              name: qd.data().name,
+              id: qd.data().id,
+              name: qd.id,
               color: qd.data().color,
             })) as SyrupType[];
             console.log("getting syrups: ", this.syrups);
@@ -117,8 +117,8 @@ export const useBeverageStore = defineStore("BeverageStore", {
             this.creamers = creamers;
           } else {
             this.creamers = qs.docs.map((qd: QueryDocumentSnapshot) => ({
-              id: qd.id,
-              name: qd.data().name,
+              id: qd.data().id,
+              name: qd.id,
               color: qd.data().color,
             })) as CreamerType[];
 
@@ -145,7 +145,55 @@ export const useBeverageStore = defineStore("BeverageStore", {
         this.currentSyrup
       );
     },
-    makeBeverage() {},
-    setUser(user: User | null) {},
+    async makeBeverage() {
+      if (!this.user) {
+        return "No user logged in, please sign in first.";
+      }
+      if (!this.currentBase || !this.currentCreamer || !this.currentSyrup || !this.currentName) {
+        return "Please complete all beverage options and the name before making a beverage.";
+      }
+
+      const newBeverageRef = doc(collection(db, "beverages"));
+
+      const newBeverage: BeverageType = {
+        id: newBeverageRef.id,
+        uid: this.user.uid,
+        name: this.currentName,
+        temp: this.currentTemp,
+        base: this.currentBase as BaseBeverageType,
+        syrup: this.currentSyrup as SyrupType,
+        creamer: this.currentCreamer as CreamerType,
+      };
+
+      try {
+        await setDoc(newBeverageRef, newBeverage);
+        return `Beverage ${this.currentName} created successfully!`;
+      } catch (error) {
+        console.error("Error creating beverage:", error);
+        return "Failed to create beverage. Please try again.";
+      }
+    },
+    setUser(user: User | null) {
+      this.user = user;
+      this.listenForBeverages();
+    },
+    listenForBeverages() {
+      if (this.snapshotUnsubscribe) {
+        this.snapshotUnsubscribe();
+      }
+
+      if (this.user) {
+        const beveragesCollection = collection(db, "beverages");
+        const q = query(beveragesCollection, where("uid", "==", this.user.uid));
+
+        this.snapshotUnsubscribe = onSnapshot(q, (qs: QuerySnapshot) => {
+          this.beverages = qs.docs.map((qd: QueryDocumentSnapshot) => {
+            return qd.data() as BeverageType;
+          });
+        });
+      } else {
+        return "Error: No current user set.";
+      }
+    },
   },
 });
