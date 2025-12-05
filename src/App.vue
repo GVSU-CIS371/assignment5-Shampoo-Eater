@@ -70,17 +70,22 @@
       </li>
     </ul>
 
-    <div class="auth-row">
+    <div class="auth-row" v-if="!beverageStore.user">
       <button @click="withGoogle">Sign in with Google</button>
     </div>
-    <input
-      v-model="beverageStore.currentName"
-      type="text"
-      placeholder="Beverage Name"
-    />
+    <div class="auth-row" v-else>
+      <span class="user-label">Signed In As {{ beverageStore.user.displayName }}</span>
+      <button @click="signOutUser">Sign Out</button>
+    </div>
+    <div v-if="beverageStore.user">
+      <input
+        v-model="beverageStore.currentName"
+        type="text"
+        placeholder="Beverage Name"
+      />
 
-    <button @click="handleMakeBeverage">🍺 Make Beverage</button>
-
+      <button @click="handleMakeBeverage">🍺 Make Beverage</button>
+    </div>
     <p v-if="message" class="status-message">
       {{ message }}
     </p>
@@ -88,25 +93,33 @@
 
   <div style="margin-top: 20px">
     <template v-for="beverage in beverageStore.beverages" :key="beverage.id">
-      <input
-        type="radio"
-        :id="beverage.id"
-        :value="beverage"
-        v-model="beverageStore.currentBeverage"
-        @change="beverageStore.showBeverage()"
-      />
-      <label :for="beverage.id">{{ beverage.name }}</label>
+      <div id="bev-buttons" v-if="beverage.uid===beverageStore.user?.uid">
+        <input
+          type="radio"
+          :id="beverage.id"
+          :value="beverage"
+          v-model="beverageStore.currentBeverage"
+          @change="beverageStore.showBeverage()"
+        />
+        <label :for="beverage.id">{{ beverage.name }}</label>
+      </div>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, onMounted } from "vue";
 import Beverage from "./components/Beverage.vue";
 import { useBeverageStore } from "./stores/beverageStore";
+import {
+  GoogleAuthProvider,
+  signInWithPopup,
+  onAuthStateChanged,
+  signOut,
+} from "firebase/auth";
+import { auth } from "./firebase.ts"
 
 const beverageStore = useBeverageStore();
-beverageStore.init();
 
 const message = ref("");
 
@@ -117,10 +130,31 @@ const showMessage = (txt: string) => {
   }, 5000);
 };
 
-const withGoogle = async () => {};
+onMounted(() => {
+  beverageStore.init();
 
-const handleMakeBeverage = () => {
-  const txt = beverageStore.makeBeverage();
+  onAuthStateChanged(auth, (currentUser) => {
+    beverageStore.setUser(currentUser);
+  });
+});
+
+const withGoogle = async () => {
+  const provider = new GoogleAuthProvider();
+  try {
+    await signInWithPopup(auth, provider);
+  } catch (error) {
+    console.error("Error during sign in:", error);
+    showMessage("Failed to sign in. Please try again.");
+  }
+};
+
+const signOutUser = async () => {
+  await signOut(auth);
+  showMessage("You have been signed out.");
+};
+
+const handleMakeBeverage = async () => {
+  const txt = await beverageStore.makeBeverage();
   showMessage(txt);
 };
 </script>
